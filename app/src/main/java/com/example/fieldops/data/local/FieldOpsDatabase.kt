@@ -11,9 +11,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         WorkOrderEntity::class,
         SyncOperationEntity::class,
-        LocationEvidenceEntity::class
+        LocationEvidenceEntity::class,
+        ActivityHistoryEntity::class,
+        WorkOrderNoteEntity::class,
+        WorkOrderPhotoEntity::class,
+        NotificationEntity::class
     ],
-    version = 3,
+    version = 6,
     exportSchema = false
 )
 abstract class FieldOpsDatabase : RoomDatabase() {
@@ -23,6 +27,14 @@ abstract class FieldOpsDatabase : RoomDatabase() {
     abstract fun syncOperationDao(): SyncOperationDao
 
     abstract fun locationEvidenceDao(): LocationEvidenceDao
+
+    abstract fun activityHistoryDao(): ActivityHistoryDao
+
+    abstract fun workOrderNoteDao(): WorkOrderNoteDao
+
+    abstract fun workOrderPhotoDao(): WorkOrderPhotoDao
+
+    abstract fun notificationDao(): NotificationDao
 
     companion object {
 
@@ -37,14 +49,14 @@ abstract class FieldOpsDatabase : RoomDatabase() {
                 ) {
                     database.execSQL(
                         """
-                        CREATE TABLE IF NOT EXISTS sync_operations (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                            workOrderId TEXT NOT NULL,
-                            operation TEXT NOT NULL,
-                            createdAt INTEGER NOT NULL,
-                            status TEXT NOT NULL
-                        )
-                        """.trimIndent()
+                CREATE TABLE IF NOT EXISTS sync_operations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    workOrderId TEXT NOT NULL,
+                    operation TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    status TEXT NOT NULL
+                )
+                """.trimIndent()
                     )
                 }
             }
@@ -57,14 +69,92 @@ abstract class FieldOpsDatabase : RoomDatabase() {
                 ) {
                     database.execSQL(
                         """
-                        CREATE TABLE IF NOT EXISTS location_evidence (
-                            workOrderId TEXT NOT NULL,
-                            latitude REAL NOT NULL,
-                            longitude REAL NOT NULL,
-                            capturedAt INTEGER NOT NULL,
-                            PRIMARY KEY(workOrderId)
-                        )
-                        """.trimIndent()
+                CREATE TABLE IF NOT EXISTS location_evidence (
+                    workOrderId TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    capturedAt INTEGER NOT NULL,
+                    PRIMARY KEY(workOrderId)
+                )
+                """.trimIndent()
+                    )
+                }
+            }
+
+        private val MIGRATION_3_4 =
+            object : Migration(3, 4) {
+
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                CREATE TABLE IF NOT EXISTS activity_history (
+                    id TEXT NOT NULL,
+                    workOrderId TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    time TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    PRIMARY KEY(id)
+                )
+                """.trimIndent()
+                    )
+                }
+            }
+
+        private val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                CREATE TABLE IF NOT EXISTS work_order_notes (
+                    id TEXT NOT NULL,
+                    workOrderId TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    PRIMARY KEY(id)
+                )
+                """.trimIndent()
+                    )
+
+                    database.execSQL(
+                        """
+                CREATE TABLE IF NOT EXISTS work_order_photos (
+                    id TEXT NOT NULL,
+                    workOrderId TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    filePath TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    PRIMARY KEY(id)
+                )
+                """.trimIndent()
+                    )
+                }
+            }
+
+        private val MIGRATION_5_6 =
+            object : Migration(5, 6) {
+
+                override fun migrate(
+                    database: SupportSQLiteDatabase
+                ) {
+                    database.execSQL(
+                        """
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    time TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    isRead INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    PRIMARY KEY(id)
+                )
+                """.trimIndent()
                     )
                 }
             }
@@ -84,7 +174,10 @@ abstract class FieldOpsDatabase : RoomDatabase() {
                         )
                             .addMigrations(
                                 MIGRATION_1_2,
-                                MIGRATION_2_3
+                                MIGRATION_2_3,
+                                MIGRATION_3_4,
+                                MIGRATION_4_5,
+                                MIGRATION_5_6
                             )
                             .build()
                             .also { database ->
@@ -93,4 +186,5 @@ abstract class FieldOpsDatabase : RoomDatabase() {
                 }
         }
     }
+
 }

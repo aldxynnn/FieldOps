@@ -24,47 +24,21 @@ class WorkOrderSyncWorker(
 
         return try {
 
-            /*
-             * Ambil antrean perubahan lokal.
-             *
-             * Karena backend saat ini belum memiliki
-             * endpoint untuk push perubahan status,
-             * operation PENDING tidak dihapus atau
-             * dianggap selesai.
-             */
             val pendingOperations =
                 database.syncOperationDao()
                     .getPendingOperations()
 
-            /*
-             * Simpan ID Work Order yang memiliki perubahan
-             * lokal yang belum tersinkron.
-             *
-             * Data server untuk Work Order tersebut tidak
-             * boleh menimpa perubahan lokal pengguna.
-             */
             val pendingWorkOrderIds =
                 pendingOperations
-                    .map {
-                        it.workOrderId
+                    .map { operation ->
+                        operation.workOrderId
                     }
                     .toSet()
 
-            /*
-             * Ambil Work Order terbaru dari server.
-             */
             val remoteWorkOrders =
-                RetrofitClient.api.getWorkOrders()
+                RetrofitClient.api
+                    .getWorkOrders()
 
-            /*
-             * Simpan data server ke Room hanya untuk
-             * Work Order yang tidak sedang memiliki
-             * perubahan lokal PENDING.
-             *
-             * Ini mencegah status lokal tertimpa oleh
-             * data server yang masih belum mengetahui
-             * perubahan terbaru pengguna.
-             */
             if (remoteWorkOrders.isNotEmpty()) {
 
                 val entities =
@@ -75,14 +49,29 @@ class WorkOrderSyncWorker(
                         .map { workOrder ->
 
                             WorkOrderEntity(
-                                id = workOrder.id,
-                                title = workOrder.title,
-                                customer = workOrder.customer,
-                                location = workOrder.location,
-                                date = workOrder.date,
-                                time = workOrder.time,
-                                status = workOrder.status,
-                                priority = workOrder.priority
+                                id =
+                                    workOrder.id,
+
+                                title =
+                                    workOrder.title,
+
+                                customer =
+                                    workOrder.customer,
+
+                                location =
+                                    workOrder.location,
+
+                                date =
+                                    workOrder.date,
+
+                                time =
+                                    workOrder.time,
+
+                                status =
+                                    workOrder.status,
+
+                                priority =
+                                    workOrder.priority
                             )
                         }
 
@@ -96,23 +85,22 @@ class WorkOrderSyncWorker(
             }
 
             /*
-             * Jangan menghapus operation PENDING.
+             * Pending operations sengaja belum ditandai COMPLETED.
              *
-             * Queue tetap menunggu sampai backend menyediakan
-             * endpoint push untuk mengirim perubahan tersebut.
+             * Backend saat ini hanya menyediakan GET Work Orders,
+             * belum menyediakan endpoint untuk mengirim perubahan
+             * status dari perangkat ke server.
              *
-             * Worker tetap dianggap berhasil karena koneksi
-             * dan proses pull dari server berhasil dilakukan.
+             * Karena itu kita tidak boleh menganggap perubahan lokal
+             * sudah berhasil tersinkronisasi.
              */
+
             Result.success()
 
         } catch (exception: Exception) {
 
-            /*
-             * Jika server/network gagal, WorkManager akan
-             * mencoba kembali sesuai mekanisme retry.
-             */
             Result.retry()
         }
     }
+
 }

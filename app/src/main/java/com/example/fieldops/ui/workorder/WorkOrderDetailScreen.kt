@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
@@ -42,6 +43,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,13 +62,18 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.fieldops.data.local.FieldOpsDatabase
 import com.example.fieldops.data.local.LocationEvidenceEntity
+import com.example.fieldops.data.local.WorkOrderNoteEntity
+import com.example.fieldops.data.local.WorkOrderPhotoEntity
 import com.example.fieldops.data.location.DeviceLocationManager
 import com.example.fieldops.data.model.WorkOrder
 import com.example.fieldops.data.model.WorkOrderStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
+import java.util.UUID
 
 data class EvidencePhoto(
     val id: String,
@@ -122,8 +129,8 @@ fun WorkOrderDetailScreen(
         mutableStateOf(false)
     }
 
-    val locationManager = remember(context) {
-        DeviceLocationManager(context)
+    var persistedPhotos by remember(workOrder.id) {
+        mutableStateOf<List<EvidencePhoto>>(emptyList())
     }
 
     val database = remember(context) {
@@ -134,7 +141,71 @@ fun WorkOrderDetailScreen(
         database.locationEvidenceDao()
     }
 
+    val noteDao = remember(database) {
+        database.workOrderNoteDao()
+    }
+
+    val photoDao = remember(database) {
+        database.workOrderPhotoDao()
+    }
+
+    val persistedNotesEntities by noteDao
+        .observeNotes(workOrder.id)
+        .collectAsState(initial = emptyList())
+
+    val persistedNotes =
+        remember(persistedNotesEntities) {
+            persistedNotesEntities.map { entity ->
+                entity.note
+            }
+        }
+
+    val persistedPhotoEntities by photoDao
+        .observePhotos(workOrder.id)
+        .collectAsState(initial = emptyList())
+
+    val locationManager = remember(context) {
+        DeviceLocationManager(context)
+    }
+
+    LaunchedEffect(
+        workOrder.id,
+        persistedPhotoEntities
+    ) {
+        val loadedPhotos =
+            withContext(Dispatchers.IO) {
+
+                persistedPhotoEntities.mapNotNull { entity ->
+
+                    val file =
+                        File(entity.filePath)
+
+                    if (!file.exists()) {
+                        return@mapNotNull null
+                    }
+
+                    val bitmap =
+                        BitmapFactory.decodeFile(
+                            file.absolutePath
+                        )
+
+                    if (bitmap == null) {
+                        null
+                    } else {
+                        EvidencePhoto(
+                            id = entity.id,
+                            title = entity.title,
+                            image = bitmap.asImageBitmap()
+                        )
+                    }
+                }
+            }
+
+        persistedPhotos = loadedPhotos
+    }
+
     LaunchedEffect(workOrder.id) {
+
         val savedLocation =
             withContext(Dispatchers.IO) {
                 locationEvidenceDao.getLocationEvidence(
@@ -157,23 +228,33 @@ fun WorkOrderDetailScreen(
 
     val cameraLauncher =
         rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.TakePicturePreview()
+            contract =
+                ActivityResultContracts.TakePicturePreview()
         ) { bitmap ->
 
             if (bitmap != null) {
-                onAddPhoto(
-                    EvidencePhoto(
-                        id = "camera_${System.currentTimeMillis()}",
-                        title = "Foto Kamera ${photos.size + 1}",
-                        image = bitmap.asImageBitmap()
+
+                coroutineScope.launch {
+
+                    savePhotoToRoom(
+                        context = context,
+                        database = database,
+                        workOrder = workOrder,
+                        bitmap = bitmap,
+                        title =
+                            "Foto Kamera ${
+                                persistedPhotoEntities.size + 1
+                            }",
+                        onPhotoAdded = onAddPhoto
                     )
-                )
+                }
             }
         }
 
     val cameraPermissionLauncher =
         rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission()
+            contract =
+                ActivityResultContracts.RequestPermission()
         ) { granted ->
 
             if (granted) {
@@ -183,27 +264,41 @@ fun WorkOrderDetailScreen(
 
     val galleryLauncher =
         rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
+            contract =
+                ActivityResultContracts.GetContent()
         ) { uri: Uri? ->
 
             if (uri != null) {
 
                 coroutineScope.launch {
 
-                    val bitmap = loadBitmapFromUri(
-                        context = context,
-                        uri = uri
-                    )
+                    val bitmap =
+                        loadBitmapFromUri(
+                            context = context,
+                            uri = uri
+                        )
 
                     if (bitmap != null) {
 
-                        onAddPhoto(
-                            EvidencePhoto(
-                                id = "gallery_${System.currentTimeMillis()}",
-                                title = "Foto Galeri ${photos.size + 1}",
-                                image = bitmap.asImageBitmap()
-                            )
+                        savePhotoToRoom(
+                            context = context,
+                            database = database,
+                            workOrder = workOrder,
+                            bitmap = bitmap,
+                            title =
+                                "Foto Galeri ${
+                                    persistedPhotoEntities.size + 1
+                                }",
+                            onPhotoAdded = onAddPhoto
                         )
+
+                    } else {
+
+                        Toast.makeText(
+                            context,
+                            "Foto tidak dapat dibaca.",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
             }
@@ -228,10 +323,12 @@ fun WorkOrderDetailScreen(
             if (fineGranted || coarseGranted) {
 
                 isGettingLocation = true
+
                 locationStatus =
                     "Mengambil lokasi perangkat..."
 
                 locationManager.getCurrentLocation(
+
                     onLocationReceived = { location ->
 
                         currentLatitude =
@@ -264,15 +361,18 @@ fun WorkOrderDetailScreen(
                         coroutineScope.launch(
                             Dispatchers.IO
                         ) {
+
                             locationEvidenceDao
                                 .insertLocationEvidence(
                                     evidence
                                 )
                         }
                     },
+
                     onError = { message ->
 
                         isGettingLocation = false
+
                         locationStatus = message
 
                         Toast.makeText(
@@ -416,6 +516,7 @@ fun WorkOrderDetailScreen(
 
                             locationManager
                                 .getCurrentLocation(
+
                                     onLocationReceived = { location ->
 
                                         currentLatitude =
@@ -445,12 +546,14 @@ fun WorkOrderDetailScreen(
                                         coroutineScope.launch(
                                             Dispatchers.IO
                                         ) {
+
                                             locationEvidenceDao
                                                 .insertLocationEvidence(
                                                     evidence
                                                 )
                                         }
                                     },
+
                                     onError = { message ->
 
                                         isGettingLocation =
@@ -490,7 +593,7 @@ fun WorkOrderDetailScreen(
 
             NotesCard(
                 noteText = noteText,
-                notes = notes,
+                notes = persistedNotes,
 
                 onNoteTextChange = {
                     noteText = it
@@ -503,21 +606,75 @@ fun WorkOrderDetailScreen(
 
                     if (cleanNote.isNotEmpty()) {
 
-                        onAddNote(cleanNote)
+                        coroutineScope.launch {
 
-                        noteText = ""
+                            val noteEntity =
+                                WorkOrderNoteEntity(
+                                    id =
+                                        UUID.randomUUID()
+                                            .toString(),
+                                    workOrderId =
+                                        workOrder.id,
+                                    note =
+                                        cleanNote,
+                                    createdAt =
+                                        System.currentTimeMillis()
+                                )
+
+                            noteDao.insertNote(
+                                noteEntity
+                            )
+
+                            onAddNote(
+                                cleanNote
+                            )
+
+                            noteText = ""
+                        }
                     }
                 }
             )
 
             PhotoEvidenceCard(
-                photos = photos,
+                photos = persistedPhotos,
 
                 onAddPhoto = {
                     showPhotoOptions = true
                 },
 
-                onRemovePhoto = onRemovePhoto
+                onRemovePhoto = { photoId ->
+
+                    coroutineScope.launch {
+
+                        val entity =
+                            photoDao.getPhoto(
+                                photoId
+                            )
+
+                        if (entity != null) {
+
+                            photoDao.deletePhoto(
+                                entity
+                            )
+
+                            withContext(
+                                Dispatchers.IO
+                            ) {
+
+                                try {
+                                    File(
+                                        entity.filePath
+                                    ).delete()
+                                } catch (_: Exception) {
+                                }
+                            }
+
+                            onRemovePhoto(
+                                photoId
+                            )
+                        }
+                    }
+                }
             )
 
             Spacer(
@@ -542,6 +699,7 @@ fun WorkOrderDetailScreen(
         ) {
 
             PhotoSourceContent(
+
                 onCamera = {
 
                     showPhotoOptions = false
@@ -579,6 +737,96 @@ fun WorkOrderDetailScreen(
             )
         }
     }
+
+}
+
+private suspend fun savePhotoToRoom(
+    context: Context,
+    database: FieldOpsDatabase,
+    workOrder: WorkOrder,
+    bitmap: Bitmap,
+    title: String,
+    onPhotoAdded: (EvidencePhoto) -> Unit
+) {
+    withContext(Dispatchers.IO) {
+
+        try {
+
+            val photoId =
+                UUID.randomUUID().toString()
+
+            val photoDirectory =
+                File(
+                    context.filesDir,
+                    "work_order_photos"
+                )
+
+            if (!photoDirectory.exists()) {
+                photoDirectory.mkdirs()
+            }
+
+            val photoFile =
+                File(
+                    photoDirectory,
+                    "${photoId}.jpg"
+                )
+
+            FileOutputStream(
+                photoFile
+            ).use { outputStream ->
+
+                bitmap.compress(
+                    Bitmap.CompressFormat.JPEG,
+                    90,
+                    outputStream
+                )
+            }
+
+            val photoEntity =
+                WorkOrderPhotoEntity(
+                    id = photoId,
+                    workOrderId = workOrder.id,
+                    title = title,
+                    filePath =
+                        photoFile.absolutePath,
+                    createdAt =
+                        System.currentTimeMillis()
+                )
+
+            database
+                .workOrderPhotoDao()
+                .insertPhoto(
+                    photoEntity
+                )
+
+            withContext(Dispatchers.Main) {
+
+                onPhotoAdded(
+                    EvidencePhoto(
+                        id = photoId,
+                        title = title,
+                        image =
+                            bitmap.asImageBitmap()
+                    )
+                )
+            }
+
+        } catch (exception: Exception) {
+
+            withContext(Dispatchers.Main) {
+
+                Toast.makeText(
+                    context,
+                    "Foto gagal disimpan: ${
+                        exception.message
+                            ?: "kesalahan tidak diketahui"
+                    }",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
 }
 
 private fun openLocationInMaps(
@@ -668,12 +916,13 @@ private fun openLocationInMaps(
             Toast.LENGTH_LONG
         ).show()
     }
+
 }
 
 private suspend fun loadBitmapFromUri(
     context: Context,
     uri: Uri
-): android.graphics.Bitmap? {
+): Bitmap? {
 
     return withContext(Dispatchers.IO) {
 
@@ -693,6 +942,7 @@ private suspend fun loadBitmapFromUri(
             null
         }
     }
+
 }
 
 @Composable
@@ -742,6 +992,7 @@ private fun DetailTopBar(
             fontWeight = FontWeight.Bold
         )
     }
+
 }
 
 @Composable
@@ -867,6 +1118,7 @@ private fun PhotoSourceContent(
             modifier = Modifier.height(18.dp)
         )
     }
+
 }
 
 @Composable
@@ -981,6 +1233,7 @@ private fun WorkOrderHeader(
             }
         }
     }
+
 }
 
 @Composable
@@ -1020,6 +1273,7 @@ private fun InformationCard(
             content()
         }
     }
+
 }
 
 @Composable
@@ -1191,6 +1445,7 @@ private fun LocationCard(
             )
         }
     }
+
 }
 
 @Composable
@@ -1273,6 +1528,7 @@ private fun LocationStatusContent(
             )
         }
     }
+
 }
 
 @Composable
@@ -1337,6 +1593,7 @@ private fun InformationRow(
             )
         }
     }
+
 }
 
 @Composable
@@ -1492,6 +1749,7 @@ private fun NotesCard(
             }
         }
     }
+
 }
 
 @Composable
@@ -1545,6 +1803,7 @@ private fun NoteItem(
             modifier = Modifier.weight(1f)
         )
     }
+
 }
 
 @Composable
@@ -1677,6 +1936,7 @@ private fun PhotoEvidenceCard(
             }
         }
     }
+
 }
 
 @Composable
@@ -1763,6 +2023,7 @@ private fun EmptyPhotoState(
             )
         }
     }
+
 }
 
 @Composable
@@ -1837,6 +2098,7 @@ private fun PhotoEvidenceItem(
             )
         }
     }
+
 }
 
 @Composable
@@ -1899,6 +2161,7 @@ private fun StatusBadge(
             fontWeight = FontWeight.Bold
         )
     }
+
 }
 
 @Composable
@@ -1984,4 +2247,5 @@ private fun ActionButton(
             }
         }
     }
+
 }

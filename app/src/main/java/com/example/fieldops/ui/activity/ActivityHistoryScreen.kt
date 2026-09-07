@@ -2,7 +2,6 @@ package com.example.fieldops.ui.activity
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,20 +10,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,165 +49,438 @@ enum class ActivityType {
     PHOTO
 }
 
+private enum class ActivityFilter {
+    ALL,
+    STATUS,
+    NOTE,
+    PHOTO
+}
+
 private val Blue = Color(0xFF1769FF)
 private val Dark = Color(0xFF10213F)
 private val Secondary = Color(0xFF718096)
 private val Background = Color(0xFFF7FAFE)
 private val Green = Color(0xFF13895C)
 private val Orange = Color(0xFFB66A00)
+private val Border = Color(0xFFE5EAF2)
 
 @Composable
 fun ActivityHistoryScreen(
     activities: List<ActivityHistoryItem>,
     onBack: () -> Unit
 ) {
-
     BackHandler {
         onBack()
+    }
+
+    var selectedFilter by remember {
+        mutableStateOf(ActivityFilter.ALL)
+    }
+
+    val filteredActivities = remember(
+        activities,
+        selectedFilter
+    ) {
+        when (selectedFilter) {
+            ActivityFilter.ALL -> activities
+
+            ActivityFilter.STATUS ->
+                activities.filter {
+                    it.type == ActivityType.STATUS
+                }
+
+            ActivityFilter.NOTE ->
+                activities.filter {
+                    it.type == ActivityType.NOTE
+                }
+
+            ActivityFilter.PHOTO ->
+                activities.filter {
+                    it.type == ActivityType.PHOTO
+                }
+        }
+    }
+
+    val statusCount = activities.count {
+        it.type == ActivityType.STATUS
+    }
+
+    val noteCount = activities.count {
+        it.type == ActivityType.NOTE
+    }
+
+    val photoCount = activities.count {
+        it.type == ActivityType.PHOTO
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .navigationBarsPadding()
     ) {
 
-        ActivityHistoryTopBar(
-            onBack = onBack
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 20.dp,
+                    vertical = 16.dp
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
 
-        if (activities.isEmpty()) {
-
-            EmptyActivityState()
-
-        } else {
+            TextButton(
+                onClick = onBack
+            ) {
+                Text(
+                    text = "‹",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Dark
+                )
+            }
 
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        horizontal = 18.dp,
-                        vertical = 16.dp
-                    )
+                modifier = Modifier.weight(1f)
             ) {
-
-                ActivitySummaryCard(
-                    totalActivities = activities.size
-                )
-
-                Spacer(
-                    modifier = Modifier.size(16.dp)
+                Text(
+                    text = "Riwayat Aktivitas",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Dark
                 )
 
                 Text(
-                    text = "Aktivitas Terbaru",
-                    color = Dark,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "Jejak aktivitas pekerjaan",
+                    fontSize = 13.sp,
+                    color = Secondary
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 20.dp
+                ),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 3.dp
+            )
+        ) {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp)
+            ) {
+
+                Text(
+                    text = "Ringkasan Aktivitas",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Dark
                 )
 
                 Spacer(
-                    modifier = Modifier.size(10.dp)
+                    modifier = Modifier.height(14.dp)
                 )
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-
-                    verticalArrangement =
-                        Arrangement.spacedBy(10.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
 
-                    items(
-                        items = activities,
-                        key = {
-                            it.id
-                        }
-                    ) { activity ->
+                    ActivityMetric(
+                        modifier = Modifier.weight(1f),
+                        value = activities.size,
+                        label = "Total",
+                        valueColor = Blue
+                    )
 
-                        ActivityItem(
-                            activity = activity
+                    ActivityMetric(
+                        modifier = Modifier.weight(1f),
+                        value = statusCount,
+                        label = "Status",
+                        valueColor = Green
+                    )
+
+                    ActivityMetric(
+                        modifier = Modifier.weight(1f),
+                        value = noteCount,
+                        label = "Catatan",
+                        valueColor = Orange
+                    )
+
+                    ActivityMetric(
+                        modifier = Modifier.weight(1f),
+                        value = photoCount,
+                        label = "Foto",
+                        valueColor = Blue
+                    )
+                }
+            }
+        }
+
+        Spacer(
+            modifier = Modifier.height(18.dp)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = 20.dp
+                )
+        ) {
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Text(
+                    text = "Aktivitas",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Dark,
+                    modifier = Modifier.weight(1f)
+                )
+
+                if (selectedFilter != ActivityFilter.ALL) {
+                    TextButton(
+                        onClick = {
+                            selectedFilter = ActivityFilter.ALL
+                        }
+                    ) {
+                        Text(
+                            text = "Reset",
+                            color = Blue,
+                            fontSize = 13.sp
                         )
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun ActivityHistoryTopBar(
-    onBack: () -> Unit
-) {
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(
-                horizontal = 8.dp,
-                vertical = 8.dp
-            ),
-
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(
-                    color = Color.Transparent,
-                    shape = CircleShape
-                )
-                .clickable {
-                    onBack()
-                },
-
-            contentAlignment = Alignment.Center
-        ) {
-
-            Text(
-                text = "‹",
-                color = Dark,
-                fontSize = 38.sp,
-                fontWeight = FontWeight.Light
+            Spacer(
+                modifier = Modifier.height(8.dp)
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+
+                ActivityFilterChip(
+                    label = "Semua",
+                    selected =
+                        selectedFilter == ActivityFilter.ALL,
+                    onClick = {
+                        selectedFilter = ActivityFilter.ALL
+                    }
+                )
+
+                ActivityFilterChip(
+                    label = "Status",
+                    selected =
+                        selectedFilter == ActivityFilter.STATUS,
+                    onClick = {
+                        selectedFilter = ActivityFilter.STATUS
+                    }
+                )
+
+                ActivityFilterChip(
+                    label = "Catatan",
+                    selected =
+                        selectedFilter == ActivityFilter.NOTE,
+                    onClick = {
+                        selectedFilter = ActivityFilter.NOTE
+                    }
+                )
+
+                ActivityFilterChip(
+                    label = "Foto",
+                    selected =
+                        selectedFilter == ActivityFilter.PHOTO,
+                    onClick = {
+                        selectedFilter = ActivityFilter.PHOTO
+                    }
+                )
+            }
         }
 
         Spacer(
-            modifier = Modifier.width(8.dp)
+            modifier = Modifier.height(10.dp)
         )
 
-        Text(
-            text = "Riwayat Aktivitas",
-            color = Dark,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
+        if (filteredActivities.isEmpty()) {
+
+            EmptyActivityState(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(20.dp),
+                filtered = selectedFilter != ActivityFilter.ALL
+            )
+
+        } else {
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding =
+                    androidx.compose.foundation.layout.PaddingValues(
+                        start = 20.dp,
+                        top = 8.dp,
+                        end = 20.dp,
+                        bottom = 28.dp
+                    ),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+
+                items(
+                    items = filteredActivities,
+                    key = {
+                        it.id
+                    }
+                ) { activity ->
+
+                    ActivityHistoryCard(
+                        activity = activity
+                    )
+                }
+            }
+        }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(Color(0xFFE8EDF5))
+}
+
+@Composable
+private fun ActivityMetric(
+    modifier: Modifier,
+    value: Int,
+    label: String,
+    valueColor: Color
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF8FAFD)
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 0.dp
+        )
+    ) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    vertical = 12.dp,
+                    horizontal = 6.dp
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+
+            Text(
+                text = value.toString(),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = valueColor
+            )
+
+            Spacer(
+                modifier = Modifier.height(2.dp)
+            )
+
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                color = Secondary
+            )
+        }
+    }
+
+}
+
+@Composable
+private fun ActivityFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = if (selected) {
+                    FontWeight.SemiBold
+                } else {
+                    FontWeight.Normal
+                }
+            )
+        },
+        shape = RoundedCornerShape(12.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Blue.copy(
+                alpha = 0.10f
+            ),
+            selectedLabelColor = Blue,
+            containerColor = Color.White,
+            labelColor = Secondary
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = Border,
+            selectedBorderColor = Blue.copy(
+                alpha = 0.30f
+            )
+        )
     )
 }
 
 @Composable
-private fun ActivitySummaryCard(
-    totalActivities: Int
+private fun ActivityHistoryCard(
+    activity: ActivityHistoryItem
 ) {
+    val iconBackground = when (activity.type) {
+        ActivityType.STATUS ->
+            Green.copy(alpha = 0.10f)
+
+        ActivityType.NOTE ->
+            Orange.copy(alpha = 0.10f)
+
+        ActivityType.PHOTO ->
+            Blue.copy(alpha = 0.10f)
+    }
+
+    val iconColor = when (activity.type) {
+        ActivityType.STATUS ->
+            Green
+
+        ActivityType.NOTE ->
+            Orange
+
+        ActivityType.PHOTO ->
+            Blue
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-
-        shape = RoundedCornerShape(20.dp),
-
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
-
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp
         )
@@ -212,98 +489,28 @@ private fun ActivitySummaryCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-
-            verticalAlignment = Alignment.CenterVertically
+                .padding(16.dp),
+            verticalAlignment = Alignment.Top
         ) {
 
             Box(
                 modifier = Modifier
-                    .size(50.dp)
-                    .background(
-                        Color(0xFFEAF2FF),
-                        RoundedCornerShape(15.dp)
-                    ),
-
+                    .size(42.dp)
+                    .clip(
+                        RoundedCornerShape(13.dp)
+                    )
+                    .background(iconBackground),
                 contentAlignment = Alignment.Center
             ) {
 
-                Text(
-                    text = "↻",
-                    color = Blue,
-                    fontSize = 25.sp,
-                    fontWeight = FontWeight.Bold
+                ActivityIcon(
+                    type = activity.type,
+                    color = iconColor
                 )
             }
 
             Spacer(
-                modifier = Modifier.width(14.dp)
-            )
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-
-                Text(
-                    text = "Total Aktivitas",
-                    color = Secondary,
-                    fontSize = 12.sp
-                )
-
-                Spacer(
-                    modifier = Modifier.size(2.dp)
-                )
-
-                Text(
-                    text = totalActivities.toString(),
-                    color = Dark,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Text(
-                text = "Aktivitas",
-                color = Secondary,
-                fontSize = 13.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun ActivityItem(
-    activity: ActivityHistoryItem
-) {
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-
-        shape = RoundedCornerShape(18.dp),
-
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 1.dp
-        )
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(15.dp),
-
-            verticalAlignment = Alignment.Top
-        ) {
-
-            ActivityIcon(
-                type = activity.type
-            )
-
-            Spacer(
-                modifier = Modifier.width(12.dp)
+                modifier = Modifier.size(12.dp)
             )
 
             Column(
@@ -321,146 +528,129 @@ private fun ActivityItem(
 
                         Text(
                             text = activity.title,
-                            color = Dark,
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold,
+                            color = Dark
                         )
 
                         Spacer(
-                            modifier = Modifier.size(3.dp)
+                            modifier = Modifier.height(3.dp)
                         )
 
                         Text(
                             text = activity.workOrderId,
-                            color = Blue,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Medium,
+                            color = Blue
                         )
                     }
 
                     Text(
                         text = activity.time,
-                        color = Secondary,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        color = Secondary
                     )
                 }
 
                 Spacer(
-                    modifier = Modifier.size(7.dp)
+                    modifier = Modifier.height(8.dp)
                 )
 
                 Text(
                     text = activity.description,
-                    color = Secondary,
                     fontSize = 13.sp,
-                    lineHeight = 19.sp
+                    lineHeight = 19.sp,
+                    color = Secondary
                 )
             }
         }
     }
+
 }
 
 @Composable
 private fun ActivityIcon(
-    type: ActivityType
+    type: ActivityType,
+    color: Color
 ) {
-
-    val background: Color
-    val foreground: Color
-    val symbol: String
-
-    when (type) {
-
-        ActivityType.STATUS -> {
-            background = Color(0xFFEAF2FF)
-            foreground = Blue
-            symbol = "✓"
-        }
-
-        ActivityType.NOTE -> {
-            background = Color(0xFFFFF3DE)
-            foreground = Orange
-            symbol = "✎"
-        }
-
-        ActivityType.PHOTO -> {
-            background = Color(0xFFE8F8F1)
-            foreground = Green
-            symbol = "▣"
-        }
+    val symbol = when (type) {
+        ActivityType.STATUS -> "✓"
+        ActivityType.NOTE -> "✎"
+        ActivityType.PHOTO -> "▣"
     }
 
-    Box(
-        modifier = Modifier
-            .size(42.dp)
-            .background(
-                background,
-                RoundedCornerShape(12.dp)
-            ),
+    Text(
+        text = symbol,
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Bold,
+        color = color
+    )
 
-        contentAlignment = Alignment.Center
-    ) {
-
-        Text(
-            text = symbol,
-            color = foreground,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
 }
 
 @Composable
-private fun EmptyActivityState() {
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-
-        horizontalAlignment = Alignment.CenterHorizontally,
-
-        verticalArrangement = Arrangement.Center
+private fun EmptyActivityState(
+    modifier: Modifier,
+    filtered: Boolean
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
     ) {
 
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .background(
-                    Color(0xFFEAF2FF),
-                    RoundedCornerShape(22.dp)
-                ),
-
-            contentAlignment = Alignment.Center
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color.White
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 2.dp
+            )
         ) {
 
-            Text(
-                text = "↻",
-                color = Blue,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+
+                Text(
+                    text = "◌",
+                    fontSize = 34.sp,
+                    color = Secondary
+                )
+
+                Spacer(
+                    modifier = Modifier.height(10.dp)
+                )
+
+                Text(
+                    text = if (filtered) {
+                        "Tidak ada aktivitas"
+                    } else {
+                        "Belum ada aktivitas"
+                    },
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Dark
+                )
+
+                Spacer(
+                    modifier = Modifier.height(5.dp)
+                )
+
+                Text(
+                    text = if (filtered) {
+                        "Belum ada aktivitas untuk filter ini."
+                    } else {
+                        "Aktivitas pekerjaan akan muncul di sini."
+                    },
+                    fontSize = 13.sp,
+                    color = Secondary
+                )
+            }
         }
-
-        Spacer(
-            modifier = Modifier.size(16.dp)
-        )
-
-        Text(
-            text = "Belum Ada Aktivitas",
-            color = Dark,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(
-            modifier = Modifier.size(6.dp)
-        )
-
-        Text(
-            text = "Aktivitas Work Order akan muncul di sini.",
-            color = Secondary,
-            fontSize = 13.sp
-        )
     }
+
 }
