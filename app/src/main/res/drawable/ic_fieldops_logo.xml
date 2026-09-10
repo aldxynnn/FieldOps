@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Outer Base Circle / Shadow Layer -->
+    <path
+        android:pathData="M50,0 A50,50 0 1,1 49.9,0 Z"
+        android:fillColor="#1B6CFA"/>
+
+    <!-- Dark Blue Fold (Left Side) -->
+    <path
+        android:pathData="M50,0 C22.4,0 0,22.4 0,50 C0,67.5 9,82.9 22.7,91.8 L50,50 Z"
+        android:fillColor="#0D4CC3"/>
+
+    <!-- Light Blue Curve (Top Right Origami Accent) -->
+    <path
+        android:pathData="M50,0 C77.6,0 100,22.4 100,50 C100,57.5 98.3,64.6 95.3,71 L50,50 Z"
+        android:fillColor="#4C92FF"/>
+
+    <!-- Inner Cutout / Negative Space -->
+    <path
+        android:pathData="M50,50 L95.3,71 C86.5,88.4 69.6,100 50,100 C39.5,100 29.8,96.8 21.7,91.3 L50,50 Z"
+        android:fillColor="#0052D4"/>
+</vector>
